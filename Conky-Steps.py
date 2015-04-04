@@ -1,10 +1,9 @@
-import os
-import sys
-import pprint
-import webbrowser
-import fitbit
+import os, sys, webbrowser, fitbit
 
 from fitbit.api import FitbitOauthClient
+
+import configparser
+config = configparser.ConfigParser()
 
 user_id = ''
 user_key = ''
@@ -40,23 +39,58 @@ def gather_keys():
 
     global user_id, user_key, user_secret
 
-    user_id = token['encoded_user_id']
     user_key = token['oauth_token']
     user_secret = token['oauth_token_secret']
 
-    print(user_id)
-    print(user_key)
-    print(user_secret)
+    print('* Your user key is %s and your user secret is %s. These will be saved in config.txt.' % (user_key, user_secret))
+    
+    # lets create that config file for next time...
+    cfgfile = open("./config.cfg",'w')
 
-    #pp = pprint.PrettyPrinter(indent=4)
-    #pp.pprint(token)
-    #print('')
-
+    # add the settings to the structure of the file, and lets write it out...
+    config.add_section('Passkey')
+    config.set('Passkey','user_key', user_key)
+    config.set('Passkey','user_secret', user_secret)
+    config.write(cfgfile)
+    cfgfile.close()
+    
+def gather_data(auth, path, activity_type):
+    t = auth.time_series('%s/%s' % (path, activity_type), period='1m')
+    print(t['%s-%s' % (path, activity_type)][-1]['value'])
+    
 
 if __name__ == '__main__':
 
     #If it does not exist - TO DO
-    gather_keys()
+    config_data = config.read('./config.cfg')
+    if config_data == []:
+        gather_keys()
+    user_key = config['Passkey']['user_key']
+    user_secret = config['Passkey']['user_secret']
+
+    authd_client = fitbit.Fitbit(client_key, client_secret, resource_owner_key=user_key, resource_owner_secret=user_secret)
+
+    if (len(sys.argv) < 2):
+        print("Please add an argument. Use '--help' for helpfile.")
+        sys.exit(1)
+    elif (len(sys.argv) > 2):
+        print("Please only use 1 argument at a time to make it compatible with Conky.")
+        sys.exit(1)
+    user_input = sys.argv[1]
     
-    #authd_client = fitbit.Fitbit(client_key, client_secret, resource_owner_key=user_key, resource_owner_secret=user_secret)
-    #print(authd_client.activity_stats())
+    if user_input in ('-h', '--help'):
+        print('''--help\tor -h\t to display this helpfile.
+        ''')
+    if user_input == '-s' or user_input == '--steps':
+        gather_data(authd_client, 'activities', 'steps')
+
+    #gather_data('activities', 'steps')
+    gather_data(authd_client, 'sleep', 'minutesAsleep')
+    gather_data(authd_client, 'activities', 'floors')
+    gather_data(authd_client, 'activities', 'distance')
+    gather_data(authd_client, 'activities', 'calories')
+    gather_data(authd_client, 'activities', 'minutesSedentary')
+    #print('\n')
+    #gather_data('minutesLightlyActive')
+    #gather_data('minutesFairlyActive')
+    #gather_data('minutesVeryActive')
