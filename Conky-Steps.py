@@ -1,4 +1,5 @@
-import os, sys, webbrowser, fitbit
+#!/usr/bin/env python
+import os, sys, webbrowser, fitbit, time
 
 from fitbit.api import FitbitOauthClient
 
@@ -30,8 +31,9 @@ def gather_keys():
         os.dup2(stderr, 2)
     
     print('* Authorize the request token in your browser\n')
+    time.sleep(3)
     
-    verifier = input('Please input PIN: ')
+    verifier = input('\nPlease input PIN: ')
 
     # get access token
     print('\n* Obtain an access token ...\n')
@@ -42,7 +44,7 @@ def gather_keys():
     user_key = token['oauth_token']
     user_secret = token['oauth_token_secret']
 
-    print('* Your user key is %s and your user secret is %s. These will be saved in config.txt.' % (user_key, user_secret))
+    print('* Your user key is %s and your user secret is %s. These will be saved in config.cfg.' % (user_key, user_secret))
     
     # lets create that config file for next time...
     cfgfile = open("./config.cfg",'w')
@@ -53,11 +55,31 @@ def gather_keys():
     config.set('Passkey','user_secret', user_secret)
     config.write(cfgfile)
     cfgfile.close()
-    
-def gather_data(auth, path, activity_type):
-    t = auth.time_series('%s/%s' % (path, activity_type), period='1m')
-    print(t['%s-%s' % (path, activity_type)][-1]['value'])
-    
+
+def gather_data(auth, path, activity_type, time_input):
+    if time_input == '1d':
+        date_list = (auth.time_series('%s/%s' % (path, activity_type), period=time_input))
+        final_sum = next (iter (date_list.values()))[-1]['value']
+    elif time_input in('1d', '7d', '30d', '1w', '1m', '3m', '6m', '1y'):
+        date_list = (auth.time_series('%s/%s' % (path, activity_type), period=time_input))
+        final_sum = 0
+        for item in range(len(next (iter (date_list.values())))):
+            final_sum = final_sum + int(next (iter (date_list.values()))[item]['value'])
+    elif time_input == 'yesterday':
+        date_list = (auth.time_series('%s/%s' % (path, activity_type), period='1w'))
+        final_sum = next (iter (date_list.values()))[-2]['value']
+    elif len(time_input) == 10:
+        date_list = (auth.time_series('%s/%s' % (path, activity_type), period='max'))
+        date = next (iter (date_list.values()))
+        for item in range(len(date)):
+            if (date[item]['dateTime']) == time_input:
+                final_sum = (date[item]['value'])
+    return(final_sum)
+
+
+def print_funct(data_list):
+    pass
+    #print(data_list['%s-%s' % (path, activity_type)][-1]['value'])
 
 if __name__ == '__main__':
 
@@ -73,24 +95,69 @@ if __name__ == '__main__':
     if (len(sys.argv) < 2):
         print("Please add an argument. Use '--help' for helpfile.")
         sys.exit(1)
-    elif (len(sys.argv) > 2):
-        print("Please only use 1 argument at a time to make it compatible with Conky.")
+    elif (len(sys.argv) != 3) and not sys.argv[1] == '--help':
+        print("Please use exactly 2 arguments. Use '--help' for helpfile.")
         sys.exit(1)
-    user_input = sys.argv[1]
     
-    if user_input in ('-h', '--help'):
-        print('''--help\tor -h\t to display this helpfile.
-        ''')
-    if user_input == '-s' or user_input == '--steps':
-        gather_data(authd_client, 'activities', 'steps')
+    activity_input = (sys.argv[1])
+    
+    if (len(sys.argv) == 3):
+        time_input = (sys.argv[2])
+        if time_input == '--today':
+            time_input = '1d'
+        else:
+            time_input = time_input[2:]
+        
+    #Activity
+    if activity_input in('--calories', '--caloriesBMR', '--steps', '--floors', '--elevation', '--minutesSedentary', '--minutesLightlyActive', '--minutesFairlyActive', '--minutesVeryActive', '--activityCalories'):
+        data_list = gather_data(authd_client, 'activities', activity_input[2:], time_input)
+        #print(data_list)
+    #Sleep
+    elif activity_input in('--startTime', '--timeInBed', '--minutesAsleep', '--awakeningsCount', '--minutesAwake', '--minutesToFallAsleep', '--minutesAfterWakeup', '--efficiency'):
+        data_list = gather_data(authd_client, 'sleep', activity_input[2:], time_input)
+        #print(data_list)
+    #Body
+    elif activity_input in('--weight', '--bmi', '--fat'):
+        data_list = gather_data(authd_client, 'body', activity_input[2:], time_input)
+        #print(data_list)
+    elif activity_input in ('-h', '--help'):
+        print('''\n--help to display this helpfile.
+    
+Example : "Conky-Steps.py --steps --1w"
+Example : "Conky-Steps.py --efficiency --today"
+Example : "Conky-Steps.py --floors --2015-03-26"
 
-    #gather_data('activities', 'steps')
-    gather_data(authd_client, 'sleep', 'minutesAsleep')
-    gather_data(authd_client, 'activities', 'floors')
-    gather_data(authd_client, 'activities', 'distance')
-    gather_data(authd_client, 'activities', 'calories')
-    gather_data(authd_client, 'activities', 'minutesSedentary')
-    #print('\n')
-    #gather_data('minutesLightlyActive')
-    #gather_data('minutesFairlyActive')
-    #gather_data('minutesVeryActive')
+--------------------* Activities *--------------------
+
+Time available = 'today', '7d', '30d', '1w', '1m', '3m', '6m', 
+                 '1y', 'yesterday', or specify date ('YYYY-MM-DD')
+
+--calories, --caloriesBMR, --steps, --floors, --elevation,
+--minutesSedentary, --minutesLightlyActive, --minutesFairlyActive,
+--minutesVeryActive, --activityCalories
+
+--------------------* Sleep *--------------------
+
+Time available = 'today', 'yesterday' or specify date ('YYYY-MM-DD')
+
+--startTime, --timeInBed, --minutesAsleep, --awakeningsCount, 
+--minutesAwake, --minutesToFallAsleep, --minutesAfterWakeup,
+--efficiency
+
+--------------------* Body *---------------------
+
+Time available = 'today', 'yesterday' or specify date ('YYYY-MM-DD')
+
+--weight, --bmi, --fat\n''')
+        sys.exit(1)
+    else:
+        print('''Could not recognize the arguments. Here are some examples. --help for more.
+        
+Example : "Conky-Steps.py --steps --1w"
+Example : "Conky-Steps.py --efficiency --today"
+Example : "Conky-Steps.py --floors --2015-03-26"
+''')
+        sys.exit(1)
+    print_funct(data_list)
+    print(data_list)
+
