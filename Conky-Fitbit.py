@@ -1,6 +1,8 @@
+#!/usr/bin/python
+
 from fitbit.api import FitbitOauthClient
 
-import os, sys, webbrowser, fitbit, time
+import os, sys, webbrowser, fitbit, time, datetime
 
 import configparser
 config = configparser.ConfigParser()
@@ -48,5 +50,74 @@ def gather_keys():
     config.write(cfgfile)
     cfgfile.close()
 
+def gather_data(auth, path, activity_type, time_input):
+    if time_input == '1d':
+        date_list = (auth.time_series('%s/%s' % (path, activity_type), period=time_input))
+        final_sum = next (iter (date_list.values()))[-1]['value']
+    elif time_input in('1d', '7d', '30d', '1w', '1m', '3m', '6m', '1y'):
+        date_list = (auth.time_series('%s/%s' % (path, activity_type), period=time_input))
+        final_sum = 0
+        for item in range(len(next (iter (date_list.values())))):
+            final_sum = final_sum + int(next (iter (date_list.values()))[item]['value'])
+    elif time_input == 'yesterday':
+        date_list = (auth.time_series('%s/%s' % (path, activity_type), period='1w'))
+        final_sum = next (iter (date_list.values()))[-2]['value']
+    elif len(time_input) == 10:
+        date_list = (auth.time_series('%s/%s' % (path, activity_type), period='max'))
+        date = next (iter (date_list.values()))
+        for item in range(len(date)):
+            if (date[item]['dateTime']) == time_input:
+                final_sum = (date[item]['value'])
+    elif time_input == 'last_week':
+        date_list = (auth.time_series('%s/%s' % (path, activity_type), period='max'))
+        date_list2 = next (iter (date_list.values()))
+        date_list3 = date_list2[-days_since_sunday:]
+        final_sum = 0
+        for item in range(len(date_list3)):
+            final_sum = final_sum + int(date_list3[item]['value'])
+    return(final_sum)
 
-gather_keys()
+
+
+
+
+if not os.path.exists("/home/eric/.conky/Fitbit/config.cfg"):
+    gather_keys()
+
+config.read('/home/eric/.conky/Fitbit/config.cfg')
+user_key = config.get('Passkey', 'user_key')
+user_secret = config.get('Passkey', 'user_secret')
+
+authd_client = fitbit.Fitbit(client_key, client_secret, resource_owner_key=user_key, resource_owner_secret=user_secret)
+    
+
+#days since last sunday
+d = datetime.datetime.today()
+today = datetime.date(d.year, d.month, d.day)
+days_since_sunday = today.weekday() + 1
+
+steps_today = gather_data(authd_client, 'activities', 'steps', "1d")
+today_ff = open('/home/eric/.conky/Fitbit/steps_format.txt', 'w')
+today_ff.write(steps_today)
+if int(steps_today) > 10000:
+    steps_today = 10000
+    today_f = open('/home/eric/.conky/Fitbit/steps.txt', 'w')
+    today_f.write(str(steps_today))
+else:
+    today_f = open('/home/eric/.conky/Fitbit/steps.txt', 'w')
+    today_f.write(str(steps_today))
+
+steps_this_week = gather_data(authd_client, 'activities', 'steps', "last_week")
+week_ff = open('/home/eric/.conky/Fitbit/week_format.txt', 'w')
+week_ff.write(str(steps_this_week))
+if int(steps_this_week) > 70000:
+    steps_this_week = 70000
+    week_f = open('/home/eric/.conky/Fitbit/week.txt', 'w')
+    week_f.write(str(steps_this_week))
+else:
+    week_f = open('/home/eric/.conky/Fitbit/week.txt', 'w')
+    week_f.write(str(steps_this_week))
+
+daily_floors = gather_data(authd_client, 'activities', 'floors', "1d")
+floor_ff = open('/home/eric/.conky/Fitbit/floor_format.txt', 'w')
+floor_ff.write(str(daily_floors))
