@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+#Conky-Fitbit by Exadrid
+
 from fitbit.api import FitbitOauthClient
 
 import os, sys, webbrowser, fitbit, time, datetime
@@ -10,6 +12,7 @@ config = configparser.ConfigParser()
 client_key = 'ba7c8a6d4376449f8ed481f0af25c7e2'
 client_secret = '69f323833a91491cbac4fdc4ff219bdc'
 
+#Get personal keys and put it in a config file
 def gather_keys():
     
     print('* Obtain a request token ...\n')
@@ -50,6 +53,7 @@ def gather_keys():
     config.write(cfgfile)
     cfgfile.close()
 
+#Gather data by time period
 def gather_data(auth, path, activity_type, time_input):
     if time_input == '1d':
         date_list = (auth.time_series('%s/%s' % (path, activity_type), period=time_input))
@@ -80,7 +84,7 @@ def gather_data(auth, path, activity_type, time_input):
 
 
 
-
+#Keys for the fitbit API
 if not os.path.exists("/home/eric/.conky/Fitbit/config.cfg"):
     gather_keys()
 
@@ -96,6 +100,7 @@ d = datetime.datetime.today()
 today = datetime.date(d.year, d.month, d.day)
 days_since_sunday = today.weekday() + 1
 
+#Information on how many steps today
 steps_today = gather_data(authd_client, 'activities', 'steps', "1d")
 today_ff = open('/home/eric/.conky/Fitbit/steps_format.txt', 'w')
 today_ff.write(steps_today)
@@ -107,6 +112,7 @@ else:
     today_f = open('/home/eric/.conky/Fitbit/steps.txt', 'w')
     today_f.write(str(steps_today))
 
+#Information on how many steps since last sunday
 steps_this_week = gather_data(authd_client, 'activities', 'steps', "last_week")
 week_ff = open('/home/eric/.conky/Fitbit/week_format.txt', 'w')
 week_ff.write(str(steps_this_week))
@@ -118,6 +124,8 @@ else:
     week_f = open('/home/eric/.conky/Fitbit/week.txt', 'w')
     week_f.write(str(steps_this_week))
 
+
+#Information on how many floors this week
 daily_floors = gather_data(authd_client, 'activities', 'floors', "1d")
 floor_ff = open('/home/eric/.conky/Fitbit/floor_format.txt', 'w')
 floor_ff.write(str(daily_floors))
